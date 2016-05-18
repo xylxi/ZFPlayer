@@ -260,7 +260,7 @@ typedef NS_ENUM(NSInteger, ZFPlayerState) {
         // reset player
         [weakSelf resetToPlayNewURL];
         weakSelf.videoURL = videoURL;
-        // 从xx秒播放
+        // 切换搞清和标清时候，记录已经播放的位置
         weakSelf.seekTime = currentTime;
     
     };
@@ -451,7 +451,8 @@ typedef NS_ENUM(NSInteger, ZFPlayerState) {
 }
 
 /**
- *  创建timer
+ *  创建timer，每隔一秒获取播放进度
+ *  AVPlayer本身就提供addPeriodicTimeObserverForInterval的API去使用
  */
 - (void)createTimer
 {
@@ -614,7 +615,6 @@ typedef NS_ENUM(NSInteger, ZFPlayerState) {
 
             }
         } else if ([keyPath isEqualToString:@"loadedTimeRanges"]) {
-            
             // 计算缓冲进度
             NSTimeInterval timeInterval = [self availableDuration];
             CMTime duration             = self.playerItem.duration;
@@ -625,7 +625,6 @@ typedef NS_ENUM(NSInteger, ZFPlayerState) {
             if (!self.isPauseByUser && !self.didEnterBackground && (self.controlView.progressView.progress-self.controlView.videoSlider.value > 0.05)) { [self play]; }
             
         } else if ([keyPath isEqualToString:@"playbackBufferEmpty"]) {
-            
             // 当缓冲是空的时候
             if (self.playerItem.playbackBufferEmpty) {
                 self.state = ZFPlayerStateBuffering;
@@ -633,12 +632,10 @@ typedef NS_ENUM(NSInteger, ZFPlayerState) {
             }
             
         } else if ([keyPath isEqualToString:@"playbackLikelyToKeepUp"]) {
-            
             // 当缓冲好的时候
             if (self.playerItem.playbackLikelyToKeepUp && self.state == ZFPlayerStateBuffering){
                 self.state = ZFPlayerStatePlaying;
             }
-            
         }
     }else if (object == self.tableView) {
         if ([keyPath isEqualToString:kZFPlayerViewContentOffset]) {
@@ -1041,6 +1038,7 @@ typedef NS_ENUM(NSInteger, ZFPlayerState) {
         [self play];
         // 如果执行了play还是没有播放则说明还没有缓存好，则再次缓存一段时间
         isBuffering = NO;
+        // isPlaybackLikelyToKeepUp如果为YES，说明可以播放
         if (!self.playerItem.isPlaybackLikelyToKeepUp) { [self bufferingSomeSecond]; }
        
     });
@@ -1056,12 +1054,12 @@ typedef NS_ENUM(NSInteger, ZFPlayerState) {
         self.controlView.videoSlider.value     = CMTimeGetSeconds([_playerItem currentTime]) / (_playerItem.duration.value / _playerItem.duration.timescale);//当前进度
 
         //当前时长进度progress
-        NSInteger proMin                       = (NSInteger)CMTimeGetSeconds([_player currentTime]) / 60;//当前秒
-        NSInteger proSec                       = (NSInteger)CMTimeGetSeconds([_player currentTime]) % 60;//当前分钟
+        NSInteger proMin                       = (NSInteger)CMTimeGetSeconds([_player currentTime]) / 60;//当前分钟
+        NSInteger proSec                       = (NSInteger)CMTimeGetSeconds([_player currentTime]) % 60;//当前秒
 
         //duration 总时长
-        NSInteger durMin                       = (NSInteger)_playerItem.duration.value / _playerItem.duration.timescale / 60;//总秒
-        NSInteger durSec                       = (NSInteger)_playerItem.duration.value / _playerItem.duration.timescale % 60;//总分钟
+        NSInteger durMin                       = (NSInteger)_playerItem.duration.value / _playerItem.duration.timescale / 60;//总分钟
+        NSInteger durSec                       = (NSInteger)_playerItem.duration.value / _playerItem.duration.timescale % 60;//总秒数
 
         self.controlView.currentTimeLabel.text = [NSString stringWithFormat:@"%02zd:%02zd", proMin, proSec];
         self.controlView.totalTimeLabel.text   = [NSString stringWithFormat:@"%02zd:%02zd", durMin, durSec];
@@ -1292,7 +1290,7 @@ typedef NS_ENUM(NSInteger, ZFPlayerState) {
         self.sliderLastValue    = slider.value;
         // 暂停
         [self pause];
-
+        // 换算成单位为秒
         CGFloat total           = (CGFloat)_playerItem.duration.value / _playerItem.duration.timescale;
 
         //计算出拖动的当前秒数
